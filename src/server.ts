@@ -105,12 +105,12 @@ export function createApp(
       withTimeout(healthChecks.database, "Database"),
       withTimeout(healthChecks.redis, "Redis"),
     ]);
-    const database = databaseResult.status === "fulfilled" ? "ok" : "unavailable";
-    const redis = redisResult.status === "fulfilled" ? "ok" : "unavailable";
+    const database = databaseResult.status === "fulfilled" ? "ok" : "error";
+    const redis = redisResult.status === "fulfilled" ? "ok" : "error";
     const healthy = database === "ok" && redis === "ok";
 
-    res.status(healthy ? 200 : 503).json({
-      status: healthy ? "ok" : "unhealthy",
+    res.status(200).json({
+      status: healthy ? "ok" : "degraded",
       database,
       redis,
     });

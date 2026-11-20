@@ -199,7 +199,7 @@ test("GET /webhook accepts the correct verification token and rejects an incorre
   assert.equal(invalid.status, 403);
 });
 
-test("GET /health reports database and Redis status without exposing errors", async (t) => {
+test("GET /health reports dependency errors without failing the liveness response", async (t) => {
   const fixture = await createFixture(t, {
     healthChecks: {
       database: async () => {
@@ -210,15 +210,15 @@ test("GET /health reports database and Redis status without exposing errors", as
   });
   const response = await fetch(`${fixture.baseUrl}/health`);
 
-  assert.equal(response.status, 503);
+  assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), {
-    status: "unhealthy",
-    database: "unavailable",
+    status: "degraded",
+    database: "error",
     redis: "ok",
   });
 });
 
-test("GET /health returns unavailable for a slow dependency within its timeout", async (t) => {
+test("GET /health returns dependency errors for a slow check within its timeout", async (t) => {
   const fixture = await createFixture(t, {
     healthChecks: {
       database: () => new Promise<void>(() => {}),
@@ -229,10 +229,10 @@ test("GET /health returns unavailable for a slow dependency within its timeout",
   const response = await fetch(`${fixture.baseUrl}/health`);
   const elapsedMs = Date.now() - startedAt;
 
-  assert.equal(response.status, 503);
+  assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), {
-    status: "unhealthy",
-    database: "unavailable",
+    status: "degraded",
+    database: "error",
     redis: "ok",
   });
   assert.ok(elapsedMs < 4000, `Health check took ${elapsedMs}ms.`);
