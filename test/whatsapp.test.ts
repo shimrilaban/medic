@@ -3,7 +3,7 @@ import { createHmac } from "node:crypto";
 import { once } from "node:events";
 import { test, type TestContext } from "node:test";
 import type { AddressInfo } from "node:net";
-import { createApp, type HealthChecks } from "../src/server.js";
+import { createApp, startServer, type HealthChecks } from "../src/server.js";
 import {
   createWhatsAppRouter,
   sendWhatsAppMessage,
@@ -215,6 +215,59 @@ test("GET /health reports database and Redis status without exposing errors", as
     status: "unhealthy",
     database: "unavailable",
     redis: "ok",
+  });
+});
+
+test("GET /health returns unavailable for a slow dependency within its timeout", async (t) => {
+  const fixture = await createFixture(t, {
+    healthChecks: {
+      database: () => new Promise<void>(() => {}),
+      redis: async () => {},
+    },
+  });
+  const startedAt = Date.now();
+  const response = await fetch(`${fixture.baseUrl}/health`);
+  const elapsedMs = Date.now() - startedAt;
+
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    status: "unhealthy",
+    database: "unavailable",
+    redis: "ok",
+  });
+  assert.ok(elapsedMs < 4000, `Health check took ${elapsedMs}ms.`);
+});
+
+test("GET /live does not wait for database or Redis checks", async (t) => {
+  let healthCheckCalls = 0;
+  const fixture = await createFixture(t, {
+    healthChecks: {
+      database: async () => {
+        healthCheckCalls += 1;
+      },
+      redis: async () => {
+        healthCheckCalls += 1;
+      },
+    },
+  });
+  const response = await fetch(`${fixture.baseUrl}/live`);
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { status: "ok" });
+  assert.equal(healthCheckCalls, 0);
+});
+
+test("startServer binds to all interfaces", async (t) => {
+  const server = startServer(0);
+  await once(server, "listening");
+  assert.equal((server.address() as AddressInfo).address, "0.0.0.0");
+
+  t.after(async () => {
+    const closed = new Promise<void>((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve());
+    });
+    server.closeAllConnections();
+    await closed;
   });
 });
 

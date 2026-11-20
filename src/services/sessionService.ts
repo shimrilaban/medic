@@ -32,7 +32,7 @@ function getRedisClient(): RedisClientType {
       url: connectionUrl,
       socket: {
         ...(useTls ? { tls: true } : {}),
-        connectTimeout: 5000,
+        connectTimeout: 2000,
         reconnectStrategy: (retries) => retries < 1 ? 250 : false,
       },
     });

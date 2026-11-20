@@ -14,7 +14,8 @@ npm run dev
 ```
 
 Open `http://localhost:3000/simulator`. The `/health` endpoint reports
-PostgreSQL and Redis availability.
+PostgreSQL and Redis availability; Render uses `/live` as a fast process-only
+liveness check so external dependency cold starts do not block deployment.
 
 ## Deploy on Render
 

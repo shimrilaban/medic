@@ -28,13 +28,18 @@ export type HealthChecks = {
   redis(): Promise<void>;
 };
 
+const HEALTH_CHECK_TIMEOUT_MS = 2000;
+
 function withTimeout<T>(
   check: () => Promise<T>,
   service: string,
 ): Promise<T> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   const timedOut = new Promise<never>((_resolve, reject) => {
-    timeout = setTimeout(() => reject(new Error(`${service} health check timed out.`)), 5000);
+    timeout = setTimeout(
+      () => reject(new Error(`${service} health check timed out.`)),
+      HEALTH_CHECK_TIMEOUT_MS,
+    );
   });
 
   return Promise.race([Promise.resolve().then(check), timedOut]).finally(() => {
@@ -91,6 +96,10 @@ export function createApp(
   app.use(verifyWebhookSignature);
   app.use(express.static(resolve("public"), { fallthrough: true, index: false }));
 
+  app.get("/live", (_req: Request, res: Response) => {
+    res.json({ status: "ok" });
+  });
+
   app.get("/health", async (_req: Request, res: Response) => {
     const [databaseResult, redisResult] = await Promise.allSettled([
       withTimeout(healthChecks.database, "Database"),
@@ -114,13 +123,20 @@ export function createApp(
 
 export const app = createApp();
 
-export function startServer(port = Number(process.env.PORT ?? 3000)): Server {
+export function startServer(
+  port = Number(process.env.PORT) || 10000,
+  host = "0.0.0.0",
+): Server {
   if (!Number.isInteger(port) || port < 0 || port > 65535) {
     throw new RangeError("PORT must be an integer between 0 and 65535.");
   }
 
-  const server = app.listen(port, () => {
-    console.log(`MediCompare WA listening on port ${port}.`);
+  const server = app.listen(port, host, () => {
+    console.log(`MediCompare WA listening on ${host}:${port}.`);
+  });
+  server.on("error", (error) => {
+    console.error("MediCompare WA HTTP server failed:", error);
+    process.exitCode = 1;
   });
   let shuttingDown = false;
 
@@ -163,5 +179,10 @@ if (
   process.argv[1]
   && import.meta.url === pathToFileURL(resolve(process.argv[1])).href
 ) {
-  startServer();
+  try {
+    startServer();
+  } catch (error) {
+    console.error("MediCompare WA failed to start:", error);
+    process.exitCode = 1;
+  }
 }

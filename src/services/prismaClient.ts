@@ -12,7 +12,10 @@ export function getPrismaClient(): PrismaClient {
     }
 
     prisma = new PrismaClient({
-      adapter: new PrismaPg({ connectionString }),
+      adapter: new PrismaPg({
+        connectionString,
+        connectionTimeoutMillis: 2000,
+      }),
     });
   }
 
