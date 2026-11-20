@@ -287,14 +287,17 @@ test("GET /simulator serves the WhatsApp-style medicine search page", async (t) 
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /text\/html/);
   assert.match(html, /MediCompare WA Simulator/);
-  assert.match(html, /Share Nairobi location/);
+  assert.match(html, /Compare chemist prices/);
   assert.match(html, /\/api\/simulate/);
   assert.match(html, /<input id="medicine-search"/);
   assert.match(html, /<datalist id="medicine-options"/);
   assert.match(html, /<select id="medicine-list" class="medicine-list" size="5"/);
   assert.match(html, /id="category-pills"/);
-  assert.match(html, /<select id="constituency"[^>]*size="5"/);
-  assert.match(html, /<select id="area"[^>]*size="5"/);
+  assert.match(html, /<select id="current-constituency"[^>]*size="5"/);
+  assert.match(html, /<select id="current-area"[^>]*size="5"/);
+  assert.match(html, /<select id="target-constituency"[^>]*size="5"/);
+  assert.match(html, /id="distance-band"/);
+  assert.match(html, /toFixed\(3\) \+ " km/);
   assert.match(html, /\/api\/medicines/);
   assert.match(html, /\/api\/locations/);
   assert.match(html, /Search Another Medicine/);
@@ -385,15 +388,19 @@ test("POST /api/simulate searches with supplied coordinates and returns pharmacy
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       query: "paracetamol",
-      constituency: "Starehe",
+      currentConstituency: "Starehe",
+      targetConstituency: "Starehe",
       areaName: "CBD / Moi Avenue",
-      lat: -1.2820393,
-      lng: 36.8213899,
+      currentLat: -1.2820393,
+      currentLng: 36.8213899,
     }),
   });
   const body = await response.json() as {
-    constituency: string;
+    currentConstituency: string;
+    targetConstituency: string;
     areaName: string;
+    distanceBand: string;
+    message: string | null;
     results: PharmacySearchResult[];
   };
 
@@ -402,10 +409,57 @@ test("POST /api/simulate searches with supplied coordinates and returns pharmacy
     query: "paracetamol",
     lat: -1.2820393,
     lng: 36.8213899,
+    currentConstituency: "Starehe",
+    targetConstituency: "Starehe",
   }]);
-  assert.equal(body.constituency, "Starehe");
+  assert.equal(body.currentConstituency, "Starehe");
+  assert.equal(body.targetConstituency, "Starehe");
   assert.equal(body.areaName, "CBD / Moi Avenue");
+  assert.equal(body.distanceBand, "< 1 km");
+  assert.equal(body.message, null);
   assert.deepEqual(body.results, pharmacyResults);
+});
+
+test("POST /api/simulate reports the other-constituency band when no chemists match", async (t) => {
+  const searches: PharmacySearchInput[] = [];
+  const fixture = await createFixture(t, {
+    simulatorSearch: async (input) => {
+      searches.push(input);
+      return [];
+    },
+  });
+  const response = await fetch(`${fixture.baseUrl}/api/simulate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      query: "paracetamol",
+      currentConstituency: "Starehe",
+      targetConstituency: "Westlands",
+      areaName: "CBD / Moi Avenue",
+      currentLat: -1.2820393,
+      currentLng: 36.8213899,
+    }),
+  });
+  const body = await response.json() as {
+    distanceBand: string;
+    message: string | null;
+    results: PharmacySearchResult[];
+  };
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(searches, [{
+    query: "paracetamol",
+    lat: -1.2820393,
+    lng: 36.8213899,
+    currentConstituency: "Starehe",
+    targetConstituency: "Westlands",
+  }]);
+  assert.equal(body.distanceBand, "1–3 km");
+  assert.equal(
+    body.message,
+    "No in-stock chemists were found between 1 km and 3 km of your current location.",
+  );
+  assert.deepEqual(body.results, []);
 });
 
 test("POST /api/simulate rejects invalid coordinates", async (t) => {
@@ -415,10 +469,11 @@ test("POST /api/simulate rejects invalid coordinates", async (t) => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       query: "paracetamol",
-      constituency: "Starehe",
+      currentConstituency: "Starehe",
+      targetConstituency: "Starehe",
       areaName: "CBD / Moi Avenue",
-      lat: 100,
-      lng: 36.8213899,
+      currentLat: 100,
+      currentLng: 36.8213899,
     }),
   });
 
@@ -435,16 +490,17 @@ test("POST /api/simulate rejects coordinates that do not match the selected area
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       query: "paracetamol",
-      constituency: "Starehe",
+      currentConstituency: "Starehe",
+      targetConstituency: "Starehe",
       areaName: "CBD / Moi Avenue",
-      lat: -1.2864,
-      lng: 36.8172,
+      currentLat: -1.2864,
+      currentLng: 36.8172,
     }),
   });
 
   assert.equal(response.status, 400);
   assert.deepEqual(await response.json(), {
-    error: "Coordinates must match the selected area.",
+    error: "Coordinates must match your selected current area.",
   });
 });
 

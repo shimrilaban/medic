@@ -6,6 +6,8 @@ export type PharmacySearchInput = {
   lng: number;
   radiusKm?: number;
   limit?: number;
+  currentConstituency?: string;
+  targetConstituency?: string;
 };
 
 export type PharmacySearchResult = {
@@ -25,6 +27,10 @@ export type PharmacySearchResult = {
   googleMapsUrl: string;
 };
 
+const SAME_CONSTITUENCY_MAX_METERS = 1000;
+const OTHER_CONSTITUENCY_MIN_METERS = 1000;
+const OTHER_CONSTITUENCY_MAX_METERS = 3000;
+
 export async function searchNearbyPharmacies(
   input: PharmacySearchInput,
   prisma: Pick<PrismaClient, "$queryRaw">,
@@ -32,9 +38,22 @@ export async function searchNearbyPharmacies(
   const { lat, lng, radiusKm = 10, limit = 5 } = input;
   const query = input.query;
   const searchQuery = query.trim();
+  const hasCurrentConstituency = input.currentConstituency !== undefined;
+  const hasTargetConstituency = input.targetConstituency !== undefined;
+  const currentConstituency = input.currentConstituency?.trim();
+  const targetConstituency = input.targetConstituency?.trim();
 
   if (!searchQuery) {
     throw new Error("Medicine search query must not be empty.");
+  }
+  if (hasCurrentConstituency !== hasTargetConstituency) {
+    throw new Error("Current and target constituencies must be provided together.");
+  }
+  if (
+    hasCurrentConstituency
+    && (!currentConstituency || !targetConstituency)
+  ) {
+    throw new Error("Current and target constituencies must not be empty.");
   }
   if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
     throw new RangeError("Latitude must be between -90 and 90.");
@@ -49,11 +68,17 @@ export async function searchNearbyPharmacies(
     throw new RangeError("Result limit must be a positive integer.");
   }
 
+  const usesConstituencyBands = hasCurrentConstituency && hasTargetConstituency;
+  const sameConstituency = usesConstituencyBands
+    && currentConstituency?.toLowerCase() === targetConstituency?.toLowerCase();
+
   return prisma.$queryRaw<PharmacySearchResult[]>`
     WITH search AS (
       SELECT
         lower(${searchQuery}) AS query,
-        ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography AS user_location
+        ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography AS user_location,
+        ${usesConstituencyBands}::boolean AS uses_constituency_bands,
+        ${sameConstituency}::boolean AS same_constituency
     )
     SELECT
       p."id" AS "pharmacyId",
@@ -78,7 +103,25 @@ export async function searchNearbyPharmacies(
     JOIN "Medicine" m ON m."id" = ip."medicineId"
     CROSS JOIN search s
     WHERE ip."quantityOnHand" > 0
-      AND ST_DWithin(p."location", s.user_location, ${radiusKm * 1000})
+      AND (
+        (
+          NOT s.uses_constituency_bands
+          AND ST_DWithin(p."location", s.user_location, ${radiusKm * 1000})
+        )
+        OR (
+          s.uses_constituency_bands
+          AND s.same_constituency
+          AND ST_DWithin(p."location", s.user_location, ${SAME_CONSTITUENCY_MAX_METERS})
+          AND ST_Distance(p."location", s.user_location) < ${SAME_CONSTITUENCY_MAX_METERS}
+        )
+        OR (
+          s.uses_constituency_bands
+          AND NOT s.same_constituency
+          AND ST_DWithin(p."location", s.user_location, ${OTHER_CONSTITUENCY_MAX_METERS})
+          AND ST_Distance(p."location", s.user_location) >= ${OTHER_CONSTITUENCY_MIN_METERS}
+          AND ST_Distance(p."location", s.user_location) <= ${OTHER_CONSTITUENCY_MAX_METERS}
+        )
+      )
       AND EXISTS (
         SELECT 1
         FROM regexp_split_to_table(s.query, '[[:space:]]+') AS token(value)

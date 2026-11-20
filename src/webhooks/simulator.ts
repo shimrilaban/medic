@@ -8,11 +8,11 @@ import {
 
 type SimulationRequest = {
   query?: unknown;
-  lat?: unknown;
-  lng?: unknown;
-  constituency?: unknown;
+  currentLat?: unknown;
+  currentLng?: unknown;
+  currentConstituency?: unknown;
+  targetConstituency?: unknown;
   areaName?: unknown;
-  radiusKm?: unknown;
 };
 
 export type SimulatorDependencies = {
@@ -266,7 +266,7 @@ const simulatorPage = `<!doctype html>
       <p>Medicine price comparison simulator</p>
     </header>
     <main>
-      <div class="intro">Search pharmacy inventory by medicine name, then share a sample Nairobi location to compare nearby prices.</div>
+      <div class="intro">Search medicine prices from your current Nairobi area, either nearby or in another constituency.</div>
       <form id="search-form">
         <label for="medicine-search">Medicine name
           <input id="medicine-search" name="medicine" type="search" list="medicine-options" maxlength="160" placeholder="Type a name or choose from the list" required disabled autocomplete="off">
@@ -280,22 +280,28 @@ const simulatorPage = `<!doctype html>
         </label>
         <p class="picker-note">Type part of a medicine name or select one from the scrollable list.</p>
         <div class="coords">
-          <label for="constituency">Constituency
-            <select id="constituency" name="constituency" size="5" required disabled>
+          <label for="current-constituency">Your current constituency
+            <select id="current-constituency" name="currentConstituency" size="5" required disabled>
               <option value="">Loading constituencies...</option>
             </select>
           </label>
-          <label for="area">Area / Location
-            <select id="area" name="area" size="5" required disabled>
+          <label for="current-area">Your current area / location
+            <select id="current-area" name="currentArea" size="5" required disabled>
               <option value="">Choose a constituency first</option>
             </select>
           </label>
         </div>
+        <label for="target-constituency">Search in constituency
+          <select id="target-constituency" name="targetConstituency" size="5" required disabled>
+            <option value="">Loading constituencies...</option>
+          </select>
+        </label>
+        <p id="distance-band" aria-live="polite">Loading location options...</p>
         <p class="location-note">Representative area coordinates, not live GPS. Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>.</p>
-        <button id="submit" type="submit">Share Nairobi location &amp; compare</button>
+        <button id="submit" type="submit">Compare chemist prices</button>
       </form>
         <section id="chat-log" aria-label="Conversation" aria-live="polite">
-          <div class="bubble incoming">Choose a medicine and Nairobi area to compare nearby prices.</div>
+          <div class="bubble incoming">Choose a medicine, your current area, and a constituency to search.</div>
         </section>
       <div id="status" role="status" aria-live="polite"></div>
       <section id="results" aria-label="Nearby pharmacy results"></section>
@@ -314,8 +320,10 @@ const simulatorPage = `<!doctype html>
     const medicineOptions = document.querySelector("#medicine-options");
     const medicineList = document.querySelector("#medicine-list");
     const categoryPills = document.querySelector("#category-pills");
-    const constituencySelect = document.querySelector("#constituency");
-    const areaSelect = document.querySelector("#area");
+    const currentConstituencySelect = document.querySelector("#current-constituency");
+    const currentAreaSelect = document.querySelector("#current-area");
+    const targetConstituencySelect = document.querySelector("#target-constituency");
+    const distanceBandStatus = document.querySelector("#distance-band");
     let constituencies = [];
     let medicineCatalog = [];
     let activeCategory = "All";
@@ -435,26 +443,42 @@ const simulatorPage = `<!doctype html>
     }
 
     function updateAreas() {
-      const constituency = constituencies.find((item) => item.name === constituencySelect.value);
-      areaSelect.replaceChildren();
-      if (!constituency) {
-        areaSelect.disabled = true;
+      const currentConstituency = constituencies.find(
+        (item) => item.name === currentConstituencySelect.value,
+      );
+      currentAreaSelect.replaceChildren();
+      if (!currentConstituency) {
+        currentAreaSelect.disabled = true;
         const option = document.createElement("option");
         option.value = "";
         option.textContent = "Choose a constituency first";
-        areaSelect.append(option);
+        currentAreaSelect.append(option);
         return;
       }
 
-      constituency.areas.forEach((area) => {
+      currentConstituency.areas.forEach((area) => {
         const option = document.createElement("option");
         option.value = area.name;
         option.textContent = area.name;
         option.dataset.lat = String(area.lat);
         option.dataset.lng = String(area.lng);
-        areaSelect.append(option);
+        currentAreaSelect.append(option);
       });
-      areaSelect.disabled = constituency.areas.length === 0;
+      currentAreaSelect.disabled = currentConstituency.areas.length === 0;
+    }
+
+    function updateDistanceBand() {
+      const current = currentConstituencySelect.value;
+      const target = targetConstituencySelect.value;
+      if (!current || !target) {
+        distanceBandStatus.textContent = "Choose your current and search constituencies.";
+        return;
+      }
+
+      const sameConstituency = current.toLowerCase() === target.toLowerCase();
+      const band = sameConstituency ? "< 1 km" : "1–3 km";
+      distanceBandStatus.textContent = "Active distance band: " + band
+        + (sameConstituency ? " (same constituency)." : " (other constituency).");
     }
 
     async function loadLocations() {
@@ -464,17 +488,26 @@ const simulatorPage = `<!doctype html>
         if (!response.ok) throw new Error(data.error || "Could not load Nairobi locations.");
 
         constituencies = data.constituencies;
-        constituencySelect.replaceChildren();
+        currentConstituencySelect.replaceChildren();
+        targetConstituencySelect.replaceChildren();
         constituencies.forEach((constituency) => {
-          const option = document.createElement("option");
-          option.value = constituency.name;
-          option.textContent = constituency.name;
-          constituencySelect.append(option);
+          const currentOption = document.createElement("option");
+          currentOption.value = constituency.name;
+          currentOption.textContent = constituency.name;
+          currentConstituencySelect.append(currentOption);
+
+          const targetOption = document.createElement("option");
+          targetOption.value = constituency.name;
+          targetOption.textContent = constituency.name;
+          targetConstituencySelect.append(targetOption);
         });
         if (constituencies.length) {
-          constituencySelect.disabled = false;
-          constituencySelect.value = constituencies[0].name;
+          currentConstituencySelect.disabled = false;
+          targetConstituencySelect.disabled = false;
+          currentConstituencySelect.value = constituencies[0].name;
+          targetConstituencySelect.value = constituencies[0].name;
           updateAreas();
+          updateDistanceBand();
         }
       } catch (error) {
         status.textContent = error instanceof Error ? error.message : "Could not load Nairobi locations.";
@@ -490,7 +523,12 @@ const simulatorPage = `<!doctype html>
         renderMedicinePicker();
       }
     });
-    constituencySelect.addEventListener("change", updateAreas);
+    currentConstituencySelect.addEventListener("change", () => {
+      updateAreas();
+      targetConstituencySelect.value = currentConstituencySelect.value;
+      updateDistanceBand();
+    });
+    targetConstituencySelect.addEventListener("change", updateDistanceBand);
 
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -498,28 +536,46 @@ const simulatorPage = `<!doctype html>
       status.textContent = "Checking nearby pharmacy prices…";
       submit.disabled = true;
       const query = medicineSearch.value.trim();
-      const selectedArea = areaSelect.selectedOptions[0];
-      const constituency = constituencySelect.value;
+      const selectedArea = currentAreaSelect.selectedOptions[0];
+      const currentConstituency = currentConstituencySelect.value;
+      const targetConstituency = targetConstituencySelect.value;
       const areaName = selectedArea.value;
-      const lat = Number(selectedArea.dataset.lat);
-      const lng = Number(selectedArea.dataset.lng);
-      addBubble(query + " near " + areaName + ", " + constituency, true);
+      const currentLat = Number(selectedArea.dataset.lat);
+      const currentLng = Number(selectedArea.dataset.lng);
+      const sameConstituency = currentConstituency.toLowerCase()
+        === targetConstituency.toLowerCase();
+      const activeDistanceBand = sameConstituency ? "< 1 km" : "1–3 km";
+      distanceBandStatus.textContent = "Active distance band: " + activeDistanceBand
+        + (sameConstituency ? " (same constituency)." : " (other constituency).");
+      addBubble(query + " from " + areaName + ", " + currentConstituency
+        + " → " + targetConstituency, true);
 
       try {
         const response = await fetch("/api/simulate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query, lat, lng, constituency, areaName })
+          body: JSON.stringify({
+            query,
+            currentLat,
+            currentLng,
+            currentConstituency,
+            targetConstituency,
+            areaName
+          })
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Search failed.");
 
         if (!data.results.length) {
-          status.textContent = "No matching in-stock pharmacies were found nearby.";
-          addBubble("No matching in-stock pharmacies were found nearby.", false);
+          const message = data.message || "No chemists matched the " + data.distanceBand + " band.";
+          status.textContent = message;
+          addBubble(message, false);
         } else {
-          status.textContent = data.results.length + " nearby result(s) around " + data.areaName + ", " + data.constituency + " — ordered by price.";
-          addBubble("Here are nearby in-stock prices, ordered from lowest to highest.", false);
+          status.textContent = data.results.length + " chemist(s) in the " + data.distanceBand
+            + " band from " + data.areaName + ", " + data.currentConstituency
+            + " — ordered by price.";
+          addBubble("Here are in-stock prices in the " + data.distanceBand
+            + " distance band, ordered from lowest to highest.", false);
           data.results.forEach((result, index) => {
             const card = document.createElement("article");
             card.className = "result";
@@ -530,7 +586,7 @@ const simulatorPage = `<!doctype html>
               + " · " + result.dosageForm
               + " · " + result.packSize
               + " — " + result.currency + " " + Number(result.price).toFixed(2));
-            addText(card, "p", Number(result.distanceKm).toFixed(1) + " km · " + formatHours(result.openingHours));
+            addText(card, "p", Number(result.distanceKm).toFixed(3) + " km · " + formatHours(result.openingHours));
             const map = addText(card, "a", "Open map");
             map.href = result.googleMapsUrl;
             map.target = "_blank";
@@ -611,58 +667,84 @@ export function createSimulatorRouter(
   router.post(
     "/api/simulate",
     async (req: Request<unknown, unknown, SimulationRequest>, res: Response) => {
-      const { query, lat, lng, constituency, areaName, radiusKm } = req.body ?? {};
+      const {
+        query,
+        currentLat,
+        currentLng,
+        currentConstituency,
+        targetConstituency,
+        areaName,
+      } = req.body ?? {};
       if (typeof query !== "string" || !query.trim() || query.length > 160) {
         res.status(400).json({ error: "Enter a medicine name up to 160 characters." });
         return;
       }
-      if (typeof constituency !== "string" || typeof areaName !== "string") {
-        res.status(400).json({ error: "Select a Nairobi constituency and area." });
+      if (
+        typeof currentConstituency !== "string"
+        || typeof targetConstituency !== "string"
+        || typeof areaName !== "string"
+      ) {
+        res.status(400).json({
+          error: "Select your current constituency, current area, and a search constituency.",
+        });
         return;
       }
-      const selectedConstituency = nairobiConstituencies.find(
-        (item) => item.name === constituency,
+      const selectedCurrentConstituency = nairobiConstituencies.find(
+        (item) => item.name === currentConstituency,
       );
-      const selectedArea = selectedConstituency?.areas.find(
+      const selectedArea = selectedCurrentConstituency?.areas.find(
         (area) => area.name === areaName,
       );
-      if (!selectedArea) {
-        res.status(400).json({ error: "Select a valid area for the chosen constituency." });
+      if (!selectedCurrentConstituency || !selectedArea) {
+        res.status(400).json({ error: "Select a valid current area for your constituency." });
+        return;
+      }
+      if (!nairobiConstituencies.some((item) => item.name === targetConstituency)) {
+        res.status(400).json({ error: "Select a valid search constituency." });
         return;
       }
       if (
-        typeof lat !== "number"
-        || !Number.isFinite(lat)
-        || lat < -90
-        || lat > 90
-        || typeof lng !== "number"
-        || !Number.isFinite(lng)
-        || lng < -180
-        || lng > 180
+        typeof currentLat !== "number"
+        || !Number.isFinite(currentLat)
+        || currentLat < -90
+        || currentLat > 90
+        || typeof currentLng !== "number"
+        || !Number.isFinite(currentLng)
+        || currentLng < -180
+        || currentLng > 180
       ) {
         res.status(400).json({ error: "Provide valid latitude and longitude coordinates." });
         return;
       }
-      if (lat !== selectedArea.lat || lng !== selectedArea.lng) {
-        res.status(400).json({ error: "Coordinates must match the selected area." });
-        return;
-      }
-      if (
-        radiusKm !== undefined
-        && (typeof radiusKm !== "number" || !Number.isFinite(radiusKm) || radiusKm <= 0)
-      ) {
-        res.status(400).json({ error: "Search radius must be a positive number of kilometers." });
+      if (currentLat !== selectedArea.lat || currentLng !== selectedArea.lng) {
+        res.status(400).json({ error: "Coordinates must match your selected current area." });
         return;
       }
 
       try {
+        const sameConstituency = currentConstituency.toLowerCase()
+          === targetConstituency.toLowerCase();
+        const distanceBand = sameConstituency ? "< 1 km" : "1–3 km";
         const results = await dependencies.searchPharmacies({
           query: query.trim(),
-          lat,
-          lng,
-          ...(typeof radiusKm === "number" ? { radiusKm } : {}),
+          lat: currentLat,
+          lng: currentLng,
+          currentConstituency,
+          targetConstituency,
         });
-        res.json({ constituency, areaName, results });
+        const message = results.length > 0
+          ? null
+          : sameConstituency
+            ? "No in-stock chemists were found within 1 km of your current location."
+            : "No in-stock chemists were found between 1 km and 3 km of your current location.";
+        res.json({
+          currentConstituency,
+          targetConstituency,
+          areaName,
+          distanceBand,
+          message,
+          results,
+        });
       } catch (error) {
         console.error("Simulator pharmacy search failed:", error);
         res.status(500).json({ error: "Unable to search pharmacy prices right now." });
