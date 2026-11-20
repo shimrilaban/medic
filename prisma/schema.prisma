@@ -1,0 +1,56 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [postgis, pg_trgm]
+}
+
+model Pharmacy {
+  id           String          @id @default(cuid())
+  name         String
+  address      String
+  phone        String?
+  openingHours Json
+  location     Unsupported("geography(Point, 4326)")
+  inventory    InventoryPrice[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([location], type: Gist)
+}
+
+model Medicine {
+  id          String          @id @default(cuid())
+  genericName String
+  brandName   String?
+  strength    String
+  dosageForm  String
+  packSize    String   @default("1 unit")
+  category    String   @default("OTC")
+  inventory   InventoryPrice[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([genericName(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([brandName(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@unique([genericName, brandName, strength, dosageForm])
+}
+
+model InventoryPrice {
+  id              String   @id @default(cuid())
+  pharmacyId      String
+  medicineId      String
+  price           Decimal  @db.Decimal(10, 2)
+  currency        String   @default("KES") @db.VarChar(3)
+  quantityOnHand Int      @default(0)
+  lastUpdated     DateTime @default(now())
+  pharmacy        Pharmacy @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  medicine        Medicine @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+
+  @@unique([pharmacyId, medicineId])
+  @@index([medicineId, price])
+  @@index([pharmacyId])
+}
