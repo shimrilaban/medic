@@ -96,6 +96,10 @@ export function createApp(
   app.use(verifyWebhookSignature);
   app.use(express.static(resolve("public"), { fallthrough: true, index: false }));
 
+  app.get("/", (_req: Request, res: Response) => {
+    res.redirect("/simulator");
+  });
+
   app.get("/live", (_req: Request, res: Response) => {
     res.json({ status: "ok" });
   });

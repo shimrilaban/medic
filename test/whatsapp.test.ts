@@ -257,6 +257,14 @@ test("GET /live does not wait for database or Redis checks", async (t) => {
   assert.equal(healthCheckCalls, 0);
 });
 
+test("GET / redirects to the simulator", async (t) => {
+  const fixture = await createFixture(t);
+  const response = await fetch(fixture.baseUrl, { redirect: "manual" });
+
+  assert.equal(response.status, 302);
+  assert.equal(response.headers.get("location"), "/simulator");
+});
+
 test("startServer binds to all interfaces", async (t) => {
   const server = startServer(0);
   await once(server, "listening");
