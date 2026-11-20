@@ -454,10 +454,10 @@ test("POST /api/simulate reports the other-constituency band when no chemists ma
     currentConstituency: "Starehe",
     targetConstituency: "Westlands",
   }]);
-  assert.equal(body.distanceBand, "1–3 km");
+  assert.equal(body.distanceBand, "1 km to < 10 km");
   assert.equal(
     body.message,
-    "No in-stock chemists were found between 1 km and 3 km of your current location.",
+    "No in-stock chemists were found at least 1 km and less than 10 km from your current location.",
   );
   assert.deepEqual(body.results, []);
 });

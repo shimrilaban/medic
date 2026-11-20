@@ -19,7 +19,8 @@ server starts. `/live` is a process-only liveness check.
 
 The simulator uses the selected current area coordinates. Searching the same
 constituency filters chemists to less than 1 km; choosing another constituency
-filters to 1–3 km. Distances and inventory are illustrative demo data.
+filters to at least 1 km but less than 10 km. Distances and inventory are
+illustrative demo data.
 
 ## Deploy on Render
 

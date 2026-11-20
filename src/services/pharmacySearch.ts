@@ -29,7 +29,7 @@ export type PharmacySearchResult = {
 
 const SAME_CONSTITUENCY_MAX_METERS = 1000;
 const OTHER_CONSTITUENCY_MIN_METERS = 1000;
-const OTHER_CONSTITUENCY_MAX_METERS = 3000;
+const OTHER_CONSTITUENCY_EXCLUSIVE_MAX_METERS = 10000;
 
 export async function searchNearbyPharmacies(
   input: PharmacySearchInput,
@@ -117,9 +117,9 @@ export async function searchNearbyPharmacies(
         OR (
           s.uses_constituency_bands
           AND NOT s.same_constituency
-          AND ST_DWithin(p."location", s.user_location, ${OTHER_CONSTITUENCY_MAX_METERS})
+          AND ST_DWithin(p."location", s.user_location, ${OTHER_CONSTITUENCY_EXCLUSIVE_MAX_METERS})
           AND ST_Distance(p."location", s.user_location) >= ${OTHER_CONSTITUENCY_MIN_METERS}
-          AND ST_Distance(p."location", s.user_location) <= ${OTHER_CONSTITUENCY_MAX_METERS}
+          AND ST_Distance(p."location", s.user_location) < ${OTHER_CONSTITUENCY_EXCLUSIVE_MAX_METERS}
         )
       )
       AND EXISTS (

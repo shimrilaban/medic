@@ -476,7 +476,7 @@ const simulatorPage = `<!doctype html>
       }
 
       const sameConstituency = current.toLowerCase() === target.toLowerCase();
-      const band = sameConstituency ? "< 1 km" : "1–3 km";
+      const band = sameConstituency ? "< 1 km" : "1 km to < 10 km";
       distanceBandStatus.textContent = "Active distance band: " + band
         + (sameConstituency ? " (same constituency)." : " (other constituency).");
     }
@@ -544,7 +544,7 @@ const simulatorPage = `<!doctype html>
       const currentLng = Number(selectedArea.dataset.lng);
       const sameConstituency = currentConstituency.toLowerCase()
         === targetConstituency.toLowerCase();
-      const activeDistanceBand = sameConstituency ? "< 1 km" : "1–3 km";
+      const activeDistanceBand = sameConstituency ? "< 1 km" : "1 km to < 10 km";
       distanceBandStatus.textContent = "Active distance band: " + activeDistanceBand
         + (sameConstituency ? " (same constituency)." : " (other constituency).");
       addBubble(query + " from " + areaName + ", " + currentConstituency
@@ -724,7 +724,7 @@ export function createSimulatorRouter(
       try {
         const sameConstituency = currentConstituency.toLowerCase()
           === targetConstituency.toLowerCase();
-        const distanceBand = sameConstituency ? "< 1 km" : "1–3 km";
+        const distanceBand = sameConstituency ? "< 1 km" : "1 km to < 10 km";
         const results = await dependencies.searchPharmacies({
           query: query.trim(),
           lat: currentLat,
@@ -736,7 +736,7 @@ export function createSimulatorRouter(
           ? null
           : sameConstituency
             ? "No in-stock chemists were found within 1 km of your current location."
-            : "No in-stock chemists were found between 1 km and 3 km of your current location.";
+            : "No in-stock chemists were found at least 1 km and less than 10 km from your current location.";
         res.json({
           currentConstituency,
           targetConstituency,
