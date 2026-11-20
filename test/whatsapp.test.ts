@@ -409,18 +409,17 @@ test("POST /api/simulate searches with supplied coordinates and returns pharmacy
     query: "paracetamol",
     lat: -1.2820393,
     lng: 36.8213899,
-    currentConstituency: "Starehe",
-    targetConstituency: "Starehe",
+    radiusKm: 10,
   }]);
   assert.equal(body.currentConstituency, "Starehe");
   assert.equal(body.targetConstituency, "Starehe");
   assert.equal(body.areaName, "CBD / Moi Avenue");
-  assert.equal(body.distanceBand, "< 1 km");
+  assert.equal(body.distanceBand, "< 10 km");
   assert.equal(body.message, null);
   assert.deepEqual(body.results, pharmacyResults);
 });
 
-test("POST /api/simulate reports the other-constituency band when no chemists match", async (t) => {
+test("POST /api/simulate reports the 10 km radius when no chemists match", async (t) => {
   const searches: PharmacySearchInput[] = [];
   const fixture = await createFixture(t, {
     simulatorSearch: async (input) => {
@@ -451,13 +450,12 @@ test("POST /api/simulate reports the other-constituency band when no chemists ma
     query: "paracetamol",
     lat: -1.2820393,
     lng: 36.8213899,
-    currentConstituency: "Starehe",
-    targetConstituency: "Westlands",
+    radiusKm: 10,
   }]);
-  assert.equal(body.distanceBand, "1 km to < 10 km");
+  assert.equal(body.distanceBand, "< 10 km");
   assert.equal(
     body.message,
-    "No in-stock chemists were found at least 1 km and less than 10 km from your current location.",
+    "No in-stock chemists were found within 10 km of your current location.",
   );
   assert.deepEqual(body.results, []);
 });

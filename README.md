@@ -17,10 +17,9 @@ Open `http://localhost:3000/simulator`. The `/health` endpoint reports
 PostgreSQL and Redis availability and always responds with HTTP 200 after the
 server starts. `/live` is a process-only liveness check.
 
-The simulator uses the selected current area coordinates. Searching the same
-constituency filters chemists to less than 1 km; choosing another constituency
-filters to at least 1 km but less than 10 km. Distances and inventory are
-illustrative demo data.
+The simulator uses the selected current area coordinates and searches for
+in-stock chemists less than 10 km away, regardless of constituency choice.
+Distances and inventory are illustrative demo data.
 
 ## Deploy on Render
 

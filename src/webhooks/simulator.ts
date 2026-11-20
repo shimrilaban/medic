@@ -475,10 +475,7 @@ const simulatorPage = `<!doctype html>
         return;
       }
 
-      const sameConstituency = current.toLowerCase() === target.toLowerCase();
-      const band = sameConstituency ? "< 1 km" : "1 km to < 10 km";
-      distanceBandStatus.textContent = "Active distance band: " + band
-        + (sameConstituency ? " (same constituency)." : " (other constituency).");
+      distanceBandStatus.textContent = "Active search radius: < 10 km.";
     }
 
     async function loadLocations() {
@@ -542,11 +539,7 @@ const simulatorPage = `<!doctype html>
       const areaName = selectedArea.value;
       const currentLat = Number(selectedArea.dataset.lat);
       const currentLng = Number(selectedArea.dataset.lng);
-      const sameConstituency = currentConstituency.toLowerCase()
-        === targetConstituency.toLowerCase();
-      const activeDistanceBand = sameConstituency ? "< 1 km" : "1 km to < 10 km";
-      distanceBandStatus.textContent = "Active distance band: " + activeDistanceBand
-        + (sameConstituency ? " (same constituency)." : " (other constituency).");
+      distanceBandStatus.textContent = "Active search radius: < 10 km.";
       addBubble(query + " from " + areaName + ", " + currentConstituency
         + " → " + targetConstituency, true);
 
@@ -567,15 +560,16 @@ const simulatorPage = `<!doctype html>
         if (!response.ok) throw new Error(data.error || "Search failed.");
 
         if (!data.results.length) {
-          const message = data.message || "No chemists matched the " + data.distanceBand + " band.";
+          const message = data.message || "No chemists matched the "
+            + data.distanceBand + " search radius.";
           status.textContent = message;
           addBubble(message, false);
         } else {
-          status.textContent = data.results.length + " chemist(s) in the " + data.distanceBand
-            + " band from " + data.areaName + ", " + data.currentConstituency
+          status.textContent = data.results.length + " chemist(s) within " + data.distanceBand
+            + " radius from " + data.areaName + ", " + data.currentConstituency
             + " — ordered by price.";
-          addBubble("Here are in-stock prices in the " + data.distanceBand
-            + " distance band, ordered from lowest to highest.", false);
+          addBubble("Here are in-stock prices within " + data.distanceBand
+            + " of your location, ordered from lowest to highest.", false);
           data.results.forEach((result, index) => {
             const card = document.createElement("article");
             card.className = "result";
@@ -722,26 +716,20 @@ export function createSimulatorRouter(
       }
 
       try {
-        const sameConstituency = currentConstituency.toLowerCase()
-          === targetConstituency.toLowerCase();
-        const distanceBand = sameConstituency ? "< 1 km" : "1 km to < 10 km";
         const results = await dependencies.searchPharmacies({
           query: query.trim(),
           lat: currentLat,
           lng: currentLng,
-          currentConstituency,
-          targetConstituency,
+          radiusKm: 10,
         });
         const message = results.length > 0
           ? null
-          : sameConstituency
-            ? "No in-stock chemists were found within 1 km of your current location."
-            : "No in-stock chemists were found at least 1 km and less than 10 km from your current location.";
+          : "No in-stock chemists were found within 10 km of your current location.";
         res.json({
           currentConstituency,
           targetConstituency,
           areaName,
-          distanceBand,
+          distanceBand: "< 10 km",
           message,
           results,
         });
